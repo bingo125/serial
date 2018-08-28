@@ -1,25 +1,15 @@
 #pragma once
 
-#include "common.h"
+
 
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
 
+#include "common.h"
+#include "base.h"
 
-
-
-#define _BUFSIZE 1024
-typedef struct serial_s{
-	base_s base;
-	serial_t prv_serial;
-	guchar buf[_BUFSIZE];
-	gint buf_cur;
-}serial_s;
-
-
-void serial_init(serial_s * serial);
-void serial_deinit(serial_s * serial);
+typedef struct serial_handle serial_t;
 
 enum serial_error_code {
     SERIAL_ERROR_ARG            = -1, /* Invalid arguments */
@@ -82,4 +72,17 @@ int serial_tostring(serial_t *serial, char *str, size_t len);
 /* Error Handling */
 int serial_errno(serial_t *serial);
 const char *serial_errmsg(serial_t *serial);
+
+#define _BUFSIZE 1024
+
+typedef struct serial_s{
+	base_s base;
+	serial_t prv_serial;
+	guchar buf[_BUFSIZE];
+	gint buf_cur;
+}serial_s;
+
+void serial_init(serial_s * serial);
+void serial_deinit(serial_s * serial);
+
 

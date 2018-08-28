@@ -5,33 +5,55 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
-
+#include <string.h>
 #include <sys/select.h>
 #include <sys/ioctl.h>
 #include <termios.h>
 
 #include "serial.h"
+#include "message.h"
+#include "translate.h"
 
+void serial_base_push(void * bs,void * head, ssize_t n){
+	base_s *pbase = bs;
+	serial_s * serial = container_of (pbase, serial_s, base);
+	memcpy(serial->buf +serial->buf_cur, (guchar *)head, n);
+	serial->buf_cur += n;
+	int base = 0;
+	while(base < serial->buf_cur){
+	
+		if(serial->buf[base] != 0x55){
+			continue;
+		}
+		
+		if(serial->buf[base +1] != 0xaa){
+			continue;
+		}
 
-
-void serial_base_push(base_s * base, base_s * against,void * head, ssize_t n){
-	serial_s * serial = container_of (base, serial_s, base);
-	if(serial->buf_cur + n < _BUFSIZE){
-		memcpy(&serial->buf[serial->buf_cur], head, n);
-		serial->buf_cur += n
+		guchar len = serial->buf[base +USER_LEN_BIT];
+		if(base +len > serial->buf_cur){
+			break;
+		}
+		if(!check_sum(&serial->buf[base], len)){
+		  translate_s * ts = translate_get();
+		  translate_arr(ts, &serial->buf[base], len);
+		}
+		base ++;
 	}
-	trans->translate_msg(msg);
-	serial->buf_cur = 0;
+	if(base != 0){
+		serial->buf_cur -= base;
+		memcpy(&pbase->buf, &pbase->buf[base], serial->buf_cur);
+	};
 }
 
-gboolean serial_base_pop(base_s * base, void ** phead, int *n){
+gboolean serial_base_pop(void * base, void ** phead, int *n){
+	base_s *pbase = base;
 	message_s *msg;
-	if(base_get_data (base, &msg)){
+	if(base_get_data (pbase, (void**)&msg)){
 		*phead = &msg;
 		*n = message_lenth (msg);
 		return true;
@@ -40,22 +62,24 @@ gboolean serial_base_pop(base_s * base, void ** phead, int *n){
 }
 
 
-gboolean serial_base_clear(base_s * base, void * ptr){
-	return message_clear(ptr);
+void serial_base_clear(void * base, void * ptr){
+	 message_clear(ptr);
 }
 
 
-void serial_init(serial_s * serial){
-	if(serial_open(&serial->prv_serial,"/dev/ttymx2", 115200) < 0){
-	 	fprintf(stderr, "serial_open(): %s\n", serial_errmsg(&serial));
+void serial_init(serial_s * s){
+	if(serial_open(&s->prv_serial,"/dev/ttyUSB0", 115200) < 0){
+	 	fprintf(stderr, "serial_open(): %s\n", serial_errmsg(&s->prv_serial));
         exit(1);
 	}
-	serial->buf_cur = 0;
-	base_init(&serial->base,serial_base_push，serial_base_pop, serial_base_clear);
+	int fd = s->prv_serial.fd;
+	s->buf_cur = 0;
+	base_init(&s->base,fd, serial_base_push, serial_base_pop, serial_base_clear);
 }
 
 void serial_deinit(serial_s * serial){
-	serial_close(&serial->prv_serial)
+	base_deinit (&serial->base);
+	serial_close(&serial->prv_serial);
 }
 
 static int _serial_error(struct serial_handle *serial, int code, int c_errno, const char *fmt, ...) {
